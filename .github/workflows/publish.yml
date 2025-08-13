@@ -7,10 +7,22 @@ on:
   release:
     types: [published]
   workflow_dispatch:  # Allow manual trigger
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        default: 'patch'
+        options:
+          - patch
+          - minor
+          - major
 
 jobs:
   publish-asgardeo:
     runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
     steps:
     - uses: actions/checkout@v4
     
@@ -26,17 +38,32 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
     
+    - name: Update version for manual trigger
+      id: version
+      if: github.event_name == 'workflow_dispatch'
+      working-directory: ./packages/asgardeo
+      run: |
+        echo "Bumping version: ${{ github.event.inputs.version_type }}"
+        poetry version ${{ github.event.inputs.version_type }}
+        NEW_VERSION=$(poetry version -s)
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New asgardeo version: $NEW_VERSION"
+    
     - name: Build asgardeo package
       working-directory: ./packages/asgardeo
       run: |
         poetry install
         poetry build
+        echo "✅ asgardeo package built successfully"
     
     - name: Publish asgardeo to PyPI
       working-directory: ./packages/asgardeo
       env:
         POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
-      run: poetry publish
+      run: |
+        echo "🚀 Publishing asgardeo to PyPI..."
+        poetry publish
+        echo "✅ asgardeo published successfully"
 
   publish-asgardeo-ai:
     runs-on: ubuntu-latest
@@ -56,25 +83,69 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
     
+    - name: Update asgardeo-ai version for manual trigger
+      if: github.event_name == 'workflow_dispatch'
+      working-directory: ./packages/asgardeo-ai
+      run: |
+        echo "Bumping version: ${{ github.event.inputs.version_type }}"
+        poetry version ${{ github.event.inputs.version_type }}
+        NEW_AI_VERSION=$(poetry version -s)
+        echo "New asgardeo-ai version: $NEW_AI_VERSION"
+    
     - name: Wait for asgardeo to be available on PyPI
       run: |
-        echo "Waiting 2 minutes for asgardeo package to be available on PyPI..."
+        echo "⏳ Waiting 2 minutes for asgardeo package to be available on PyPI..."
         sleep 120
+        echo "✅ Wait complete, proceeding with asgardeo-ai"
     
     - name: Update asgardeo dependency to use PyPI version
       working-directory: ./packages/asgardeo-ai
       run: |
+        if [ -n "${{ needs.publish-asgardeo.outputs.new_version }}" ]; then
+          ASGARDEO_VERSION="${{ needs.publish-asgardeo.outputs.new_version }}"
+        else
+          # For tag-based releases, extract version from tag
+          ASGARDEO_VERSION="${GITHUB_REF#refs/tags/v}"
+        fi
+        echo "🔄 Updating asgardeo dependency to version: $ASGARDEO_VERSION"
+        
         # Replace local path dependency with PyPI version
-        sed -i 's/asgardeo = { path = "..\/asgardeo", develop = true }/asgardeo = "^0.1.0"/' pyproject.toml
+        sed -i "s/asgardeo = { path = \"..\/asgardeo\", develop = true }/asgardeo = \"^$ASGARDEO_VERSION\"/" pyproject.toml
+        
+        echo "✅ Updated dependency in pyproject.toml"
+        grep "asgardeo = " pyproject.toml
         
     - name: Build asgardeo-ai package
       working-directory: ./packages/asgardeo-ai
       run: |
         poetry install
         poetry build
+        echo "✅ asgardeo-ai package built successfully"
     
     - name: Publish asgardeo-ai to PyPI
       working-directory: ./packages/asgardeo-ai
       env:
         POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
-      run: poetry publish
+      run: |
+        echo "🚀 Publishing asgardeo-ai to PyPI..."
+        poetry publish
+        echo "✅ asgardeo-ai published successfully"
+    
+  summary:
+    runs-on: ubuntu-latest
+    needs: [publish-asgardeo, publish-asgardeo-ai]
+    if: always()
+    steps:
+    - name: Publication Summary
+      run: |
+        echo "📋 Publication Summary"
+        echo "===================="
+        echo "✅ asgardeo package published"
+        echo "✅ asgardeo-ai package published"
+        
+        if [ -n "${{ needs.publish-asgardeo.outputs.new_version }}" ]; then
+          echo "🔖 Published version: ${{ needs.publish-asgardeo.outputs.new_version }}"
+        fi
+        
+        echo ""
+        echo "🎉 Publication workflow completed!"

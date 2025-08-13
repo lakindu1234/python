@@ -1,3 +1,19 @@
+
+"""
+Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com).
+WSO2 LLC. licenses this file to you under the Apache License,
+Version 2.0 (the "License"); you may not use this file except
+in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+"""
+
 """Async Asgardeo authentication and token clients."""
 
 import json
@@ -28,7 +44,7 @@ class AsgardeoNativeAuthClient:
     def __init__(self, config: AsgardeoConfig) -> None:
         """Initialize the Auth Client.
 
-        :param config: AsgardeoConfig instance with shared configuration
+        :param config: AsgardeoConfig instance with configuration
         """
         self.config = config
         self.base_url = config.base_url.rstrip("/")
@@ -36,6 +52,7 @@ class AsgardeoNativeAuthClient:
             "Accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded",
         }
+        self.session = httpx.AsyncClient()
         self.flow_id: str | None = None
         self.flow_status: str | None = None
         self.next_step: dict[str, Any] | None = None
@@ -67,7 +84,7 @@ class AsgardeoNativeAuthClient:
             data.update(params)
 
         try:
-            response = await self.config.session.post(
+            response = await self.session.post(
                 url,
                 headers=self.headers,
                 data=urlencode(data),
@@ -115,7 +132,7 @@ class AsgardeoNativeAuthClient:
 
         headers = {"Content-Type": "application/json"}
         try:
-            response = await self.config.session.post(
+            response = await self.session.post(
                 url,
                 headers=headers,
                 data=json.dumps(body),
@@ -206,8 +223,13 @@ class AsgardeoNativeAuthClient:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
-        await self.config.session.aclose()
+        await self.close()
         return False
+    
+    async def close(self):
+        """Close the auth client and cleanup resources."""
+        await self.session.aclose()
+        await self.token_client.close()
 
     async def authenticate_with_password(
         self, username: str, password: str
@@ -240,11 +262,12 @@ class AsgardeoTokenClient:
     def __init__(self, config: AsgardeoConfig) -> None:
         """Initialize the Token Client.
 
-        :param config: AsgardeoConfig instance with shared configuration
+        :param config: AsgardeoConfig instance with configuration
         """
         self.config = config
         self.base_url = config.base_url.rstrip("/")
         self.headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        self.session = httpx.AsyncClient()
 
     async def get_token(self, grant_type: str, **kwargs: Any) -> OAuthToken:
         """Unified token request function for various grant types.
@@ -284,7 +307,7 @@ class AsgardeoTokenClient:
             raise ValidationError(f"Unsupported grant type: {grant_type}")
 
         try:
-            response = await self.config.session.post(
+            response = await self.session.post(
                 url,
                 headers=self.headers,
                 data=urlencode(data),
@@ -316,3 +339,16 @@ class AsgardeoTokenClient:
         :return: New OAuthToken instance
         """
         return await self.get_token("refresh_token", refresh_token=refresh_token)
+    
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.session.aclose()
+        return False
+    
+    async def close(self):
+        """Close the token client and cleanup resources."""
+        await self.session.aclose()

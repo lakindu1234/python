@@ -29,7 +29,7 @@ from asgardeo_ai import AgentAuthManager, AgentConfig
 # Configure Asgardeo connection
 config = AsgardeoConfig(
     base_url="https://api.asgardeo.io/t/your-organization",
-    client_id="your_client_id",
+    client_id="your_client_id", 
     redirect_uri="https://your-app.com/callback",
     client_secret="your_client_secret"
 )

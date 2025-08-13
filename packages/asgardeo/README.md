@@ -10,10 +10,20 @@ pip install asgardeo
 
 
 
-## Usage
+## Quick Start
 
-### Native Authentication
 ```python
+from asgardeo import AsgardeoConfig, AsgardeoNativeAuthClient
+
+# Setup
+config = AsgardeoConfig(
+    base_url="https://api.asgardeo.io/t/your-organization",
+    client_id="your_client_id",
+    redirect_uri="your_redirect_uri",
+    client_secret="your_client_secret"  # Optional
+)
+
+# Authenticate
 async with AsgardeoNativeAuthClient(config) as client:
     # Start flow
     init_response = await client.authenticate()
@@ -25,8 +35,9 @@ async with AsgardeoNativeAuthClient(config) as client:
     )
     
     # Get tokens
-    if client.flow_status == FlowStatus.SUCCESS_COMPLETED:
+    if client.flow_status == "SUCCESS":
         tokens = await client.get_tokens()
+        print(f"Access Token: {tokens.access_token}")
 ```
 
 ## Features
