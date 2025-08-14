@@ -291,6 +291,8 @@ class AsgardeoTokenClient:
                 )
             data["code"] = code
             data["redirect_uri"] = kwargs.get("redirect_uri", self.config.redirect_uri)
+            if "code_verifier" in kwargs:
+                data["code_verifier"] = kwargs.get("code_verifier")            
             if "actor_token" in kwargs:
                 data["actor_token"] = kwargs.get("actor_token")
         elif grant_type == "refresh_token":
