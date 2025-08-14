@@ -115,7 +115,7 @@ The [`examples/`](./examples/) directory contains practical examples:
 ### Setup
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/asgardeo/python.git
 cd python
 
 # Install core SDK
