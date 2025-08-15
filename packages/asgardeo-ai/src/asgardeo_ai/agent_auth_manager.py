@@ -31,6 +31,9 @@ from asgardeo import (
     AuthenticationError,
     TokenError,
     ValidationError,
+    generate_pkce_pair,
+    generate_state,
+    build_authorization_url
 )
 
 logger = logging.getLogger(__name__)
@@ -42,16 +45,6 @@ class AgentConfig:
     
     agent_id: str
     agent_secret: str
-
-
-def generate_state() -> str:
-    """Generate a secure random state parameter."""
-    return base64.urlsafe_b64encode(os.urandom(16)).decode('utf-8').rstrip('=')
-
-
-def build_authorization_url(base_url: str, params: Dict[str, Any]) -> str:
-    """Build authorization URL with parameters."""
-    return f"{base_url}?{urlencode(params)}"
 
 class AgentAuthManager:
     """Agent-enhanced OAuth2 authentication manager for AI agents."""
@@ -91,7 +84,12 @@ class AgentAuthManager:
                     self.config.scope = ' '.join(scopes)
                 
                 # Start authentication flow
-                init_response = await native_client.authenticate()
+                code_verifier, code_challenge = generate_pkce_pair()
+                params = {
+                    "code_challenge": code_challenge,
+                    "code_challenge_method": "S256",
+                }
+                init_response = await native_client.authenticate(params=params)
                 
                 if native_client.flow_status == FlowStatus.SUCCESS_COMPLETED:
                     auth_data = init_response.get('authData', {})
@@ -127,7 +125,7 @@ class AgentAuthManager:
                     raise TokenError("No authorization code received from authentication flow.")
 
                 # Exchange code for token
-                token = await self.token_client.get_token('authorization_code', code=code)
+                token = await self.token_client.get_token('authorization_code', code=code, code_verifier=code_verifier)
                 
                 # Restore original scope
                 if scopes:
@@ -180,12 +178,57 @@ class AgentAuthManager:
             auth_params
         )
         return auth_url, state
+    
+    def get_authorization_url_with_pkce(
+        self,
+        scopes: List[str],
+        state: Optional[str] = None,
+        resource: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Tuple[str, str, str]:
+        """Generate authorization URL for user authentication.
+        
+        :param scopes: List of OAuth scopes to request
+        :param state: Optional state parameter (generated if not provided)
+        :param resource: Optional resource parameter
+        :param kwargs: Additional parameters for the authorization URL
+        :return: Tuple of (authorization_url, state)
+        """
+        if not state:
+            state = generate_state()
+
+        code_verifier, code_challenge = generate_pkce_pair()    
+            
+        auth_params = {
+            "client_id": self.config.client_id,
+            "redirect_uri": self.config.redirect_uri,
+            "scope": " ".join(scopes),
+            "state": state,
+            "response_type": "code",
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+        
+        if resource:
+            auth_params["resource"] = resource
+            
+        if self.agent_config:
+            auth_params["requested_actor"] = self.agent_config.agent_id
+            
+        auth_params.update(kwargs)
+        
+        auth_url = build_authorization_url(
+            f"{self.config.base_url}/oauth2/authorize",
+            auth_params
+        )
+        return auth_url, state, code_verifier    
 
     async def get_obo_token(
         self,
         auth_code: str,
         agent_token: str,
         scopes: Optional[List[str]] = None,
+        code_verifier: Optional[str] = None
     ) -> OAuthToken:
         """Get on-behalf-of (OBO) token for user using authorization code.
         
@@ -206,6 +249,7 @@ class AgentAuthManager:
                 code=auth_code,
                 scope=scope_str,
                 actor_token=actor_token_val,
+                code_verifier=code_verifier
             )
             return token
             
