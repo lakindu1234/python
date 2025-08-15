@@ -23,6 +23,8 @@ pip install asgardeo
 ### [asgardeo-ai](./packages/asgardeo-ai/)
 AI agent authentication and on-behalf-of (OBO) token flows.
 
+> ⚠️ WARNING: Asgardeo AI SDK is currently under development, is not intended for production use, and therefore has no official support.
+
 ```bash  
 pip install asgardeo-ai
 ```

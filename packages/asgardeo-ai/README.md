@@ -1,6 +1,10 @@
 # Asgardeo AI SDK
 
-Async Python SDK for Asgardeo AI agent authentication and on-behalf-of (OBO) token flows.
+> ⚠️ WARNING: Asgardeo AI SDK is currently under development, is not intended for production use, and therefore has no official support.
+
+Python SDK for Asgardeo AI agent authentication and on-behalf-of (OBO) token flows.
+
+
 
 ## Features
 - **Agent Authentication**: Authenticate AI agents using agent credentials
