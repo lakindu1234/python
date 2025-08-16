@@ -17,6 +17,7 @@ under the License.
 """Async Asgardeo authentication and token clients."""
 
 import json
+import logging
 from typing import Any
 from urllib.parse import urlencode
 
@@ -33,6 +34,7 @@ from ..models import (
     ValidationError,
 )
 
+logger = logging.getLogger(__name__)
 
 class AsgardeoNativeAuthClient:
     """Async client for handling Asgardeo App Native Authentication flows.
@@ -72,12 +74,15 @@ class AsgardeoNativeAuthClient:
         url = f"{self.base_url}/oauth2/authorize"
         data = {
             "client_id": self.config.client_id,
-            "client_secret": self.config.client_secret,
             "response_type": "code",
             "redirect_uri": self.config.redirect_uri,
             "scope": self.config.scope,
             "response_mode": "direct",
         }
+
+        # Only add client_secret if code_verifier is not in params (PKCE flow)
+        if not (params and "code_challenge" in params):
+            data["client_secret"] = self.config.client_secret
         if state:
             data["state"] = state
         if params:
@@ -280,7 +285,8 @@ class AsgardeoTokenClient:
         """
         url = f"{self.base_url}/oauth2/token"
         data = {"grant_type": grant_type, "client_id": self.config.client_id}
-        if self.config.client_secret:
+
+        if self.config.client_secret and "code_verifier" not in kwargs:
             data["client_secret"] = self.config.client_secret
 
         if grant_type == "authorization_code":

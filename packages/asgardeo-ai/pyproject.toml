@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "asgardeo_ai"
-version = "0.1.0"
+version = "0.2.1"
 description = "Async Python SDK for Asgardeo AI agent authentication"
 authors = ["Thilina Senarath <thilinas@wso2.com>"]
 license = "MIT"

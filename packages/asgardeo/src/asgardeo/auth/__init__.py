@@ -24,8 +24,9 @@ from ..models import (
     ValidationError,
 )
 from .client import AsgardeoNativeAuthClient, AsgardeoTokenClient
+from .util import generate_pkce_pair, generate_state, build_authorization_url
 
-__version__ = "0.1.0"
+__version__ = "0.2.1"
 
 __all__ = [
     "AsgardeoConfig",
@@ -38,4 +39,7 @@ __all__ = [
     "OAuthToken",
     "TokenError",
     "ValidationError",
+    "generate_pkce_pair",
+    "generate_state",
+    "build_authorization_url",
 ]
