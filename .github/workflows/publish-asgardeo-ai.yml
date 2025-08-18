@@ -1,0 +1,99 @@
+name: Publish asgardeo-ai to PyPI
+
+on:
+  push:
+    tags:
+      - 'asgardeo-ai-v*'     # e.g. asgardeo-ai-v1.2.3
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type (only used for manual dispatch)'
+        required: true
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+      asgardeo_version:
+        description: 'Optional: set asgardeo version (e.g. ^1.2.3) if converting from path dep'
+        required: false
+        type: string
+
+jobs:
+  publish-asgardeo-ai:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Bump version (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: ./packages/asgardeo-ai
+        id: bump
+        run: |
+          echo "Bumping version: ${{ github.event.inputs.version_type }}"
+          poetry version ${{ github.event.inputs.version_type }}
+          NEW_VERSION=$(poetry version -s)
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New asgardeo-ai version: $NEW_VERSION"
+
+      - name: Ensure asgardeo dependency uses PyPI, not path
+        working-directory: ./packages/asgardeo-ai
+        run: |
+          if grep -q 'asgardeo = { path' pyproject.toml; then
+            echo 'Path dependency detected.'
+            if [ -n "${{ github.event.inputs.asgardeo_version }}" ]; then
+              TARGET="${{ github.event.inputs.asgardeo_version }}"
+              echo "Converting to version spec: $TARGET"
+              sed -i "s|asgardeo = { path = \"..\/asgardeo\", develop = true }|asgardeo = \"$TARGET\"|" pyproject.toml
+            else
+              echo 'ERROR: Provide asgardeo_version input to replace path dependency.' >&2
+              exit 1
+            fi
+          else
+            echo 'asgardeo already uses a version spec.'
+          fi
+          echo 'Current asgardeo dependency line:'
+          grep '^asgardeo\s*=' pyproject.toml || true
+
+      - name: Validate tag vs pyproject version (tag builds)
+        if: startsWith(github.ref, 'refs/tags/asgardeo-ai-v')
+        working-directory: ./packages/asgardeo-ai
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#asgardeo-ai-v}"
+          FILE_VERSION=$(poetry version -s)
+          if [ "$TAG_VERSION" != "$FILE_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match pyproject.toml version ($FILE_VERSION)." >&2
+            exit 1
+          fi
+          echo "Tag and pyproject versions match: $TAG_VERSION"
+
+      - name: Install dependencies & build wheel
+        working-directory: ./packages/asgardeo-ai
+        run: |
+          poetry install
+          poetry build
+
+      - name: Publish to PyPI
+        working-directory: ./packages/asgardeo-ai
+        env:
+          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          echo "Publishing asgardeo-ai to PyPI"
+          poetry publish
+          echo "Published asgardeo-ai"
+
+      - name: Summary
+        working-directory: ./packages/asgardeo-ai
+        run: |
+          VERSION=$(poetry version -s)
+          echo "asgardeo-ai version published: $VERSION"

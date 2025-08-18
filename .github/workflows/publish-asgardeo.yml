@@ -1,0 +1,76 @@
+name: Publish asgardeo to PyPI
+
+on:
+  push:
+    tags:
+      - 'asgardeo-v*'        # e.g. asgardeo-v1.2.3
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type (only used for manual dispatch)'
+        required: true
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+
+jobs:
+  publish-asgardeo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Bump version (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: ./packages/asgardeo
+        id: bump
+        run: |
+          echo "Bumping version: ${{ github.event.inputs.version_type }}"
+          poetry version ${{ github.event.inputs.version_type }}
+          NEW_VERSION=$(poetry version -s)
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Validate tag vs pyproject version (tag builds)
+        if: startsWith(github.ref, 'refs/tags/asgardeo-v')
+        working-directory: ./packages/asgardeo
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#asgardeo-v}"
+          FILE_VERSION=$(poetry version -s)
+          if [ "$TAG_VERSION" != "$FILE_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match pyproject.toml version ($FILE_VERSION)." >&2
+            exit 1
+          fi
+          echo "Tag and pyproject versions match: $TAG_VERSION"
+
+      - name: Install dependencies & build wheel
+        working-directory: ./packages/asgardeo
+        run: |
+          poetry install
+          poetry build
+
+      - name: Publish to PyPI
+        working-directory: ./packages/asgardeo
+        env:
+          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          echo "Publishing asgardeo to PyPI"
+          poetry publish
+          echo "Published asgardeo"
+
+      - name: Summary
+        working-directory: ./packages/asgardeo
+        run: |
+          VERSION=$(poetry version -s)
+          echo "asgardeo version published: $VERSION"
