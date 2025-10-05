@@ -194,6 +194,11 @@ class AsgardeoNativeAuthClient:
         self.flow_id = resp_json.get("flowId", self.flow_id)
         self.flow_status = resp_json.get("flowStatus")
         self.next_step = resp_json.get("nextStep")
+
+
+        # Handle successful completion (supports both Enum and plain string forms)
+        success_completed = getattr(FlowStatus, "SUCCESS_COMPLETED", "SUCCESS_COMPLETED")
+        
         if self.flow_status == FlowStatus.SUCCESS_COMPLETED:
             self.auth_data = resp_json.get("authData")
 
